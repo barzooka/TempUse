@@ -1,0 +1,45 @@
+1. updateLayoutToAnimationLocked(), this method locks the mLayoutToAnime, used to reset and update the fields of mLayoutToAnim which is an instance of LayoutToAnimatorParams. this is a middle layer object used to pass the animation parameters from WMS to WindowAnimator. if this parameter changes, the fields of this object will be copied to WindowAnimator at the beginning of processing a frame. the updated fields here is :
+	1). mWindAnimatorLists. this is a SparseArray which stores the WinAnimatorList of each display content. WinAnimatorList is an array saves the WinAnimators of windows which already have surfaces.
+	2). mWallpaperTarget
+	3). mLowerWallpaperTarget
+	4). mUpperWallpaperTarget
+	5). mAppWindowAnimParams, stores all the animating app's AppAnimator.
+	6). mParamsModified is set to true, this fields indicates if we need to copy the params at the begining of processing a frame.
+	NOTE: mDimParams is not changed here because it has been updated duraring layout.
+	mChanges is not changed here.
+	mWallpaperTokens is not changed here.
+	mAnimationScheduled is not changed here.
+========================================================
+
+Animation is started by scheduleAnimationLocked();
+1. scheduleAnimationLocked() this method is called with the lock of mLayoutToAnime.
+	Calling this method will set mLayoutToAnime.mAnimationScheduled to true. this field idicating if another animation frame is scheduled.
+	mAnimator.mAnimationRunnable is posted to mChoreographer. this will be called when next vsync comes. this method performs an animation frame.
+
+2. call run() this method is locked by mService.mWindowMap and current WindowAnimator. so, when processing an animation frame. a layout can never happen.
+	1) call copyLayoutToAnimParamsLocked() this will copy the params saved in mLayoutToAnime to WinAnimator.
+		WindowAnimator
+		|--mDisplayContentsAnimators:ArrayList<DisplayContentAnimator>
+		|	|-- mWindowAnimators:WinAnimatorList
+		|	|-- mDimAnimator:DimAnimator (not changed here)
+		|	|-- mDimParams:DimAnimator.Parameters (only changes if new Dim surface is shown and existing dim surface is obscured by new Dim surface.
+		|	|-- mWindowAnimationBackgroundSurface:DimSurface
+		|	|-- ScreenRotationAnimation:ScreenRotationAnimation
+		|-- mWallpaperTokens:ArrayList<WindowToken>
+		|-- mWallpaperTarget:WindowState
+		|-- mWpAppAnimator : AppAnimator (which is the AppAnimator of target)
+		|-- mLowerWallpaperTarget:WindowState
+		|-- mupperWallpaperTarget:WindowState
+		 -- mAppAnmators:ArrayList<AppAnimator>
+	2) call animateLocked() this method perform a real frame processing.
+	------- preparing ----------------------------------------------------------------
+		1. clear pending layout changes.
+		2. update mCurrentTime
+		3. set mBulkUpdateParams to SET_ORIENTATION_CHANGE_COMPLETE
+		4. save the mAnimating to wasAnimating, and then init mAnimating to false. this fileds will be updated to true or false according to the animators status.
+	------- process frame ------------------------------------------------------------
+		1. step app animators first by calling updateAppWindowsLocked();
+		2. fall through a traversal for each item of mDisplayContentsAnimators and process them
+			1). first, perform the rotation animator.
+			2). then, perform windows animator and wallpaper animator
+			3). get all the window state animators and let them prepareSurfaceLocked

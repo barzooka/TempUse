@@ -1,0 +1,79 @@
+performLayoutAndPlaceSurfaceLocked()
+->performLayoutAndPlaceSurfacesLockedLoop()
+	1. Remove Windows that is already in the list of mForceRemoves()
+	2. call performLayoutAndPlaceSurfacesLockedInner();
+	3. check if any DisplayContents is layoutNeeded. Do performLayoutAndPlcesSurfaceLocked again if true.
+	4. send callback to listeners if window list has changed.
+  ->performLayoutAndPlaceSurfacesLockedInner
+	1. update focused window first if mFocusMayChange is true.
+	2. update all the exiting token's hasVisible property to false
+	3. for each displayContent:
+		1) gets 4 layout parameters from DisplayContent
+			logicalWidth, logicalHeight, appWidth, appHeight
+		2) fall into a layout loop, this will continue layout all the windows inside this displaycontent until mPolicy.finishPostLayoutPolicyLw() think there is nothing to change in this DisplayContent. If we cannot clear the pending changes after 4 repeats, we will not perform layout any more. but the configuration and wallpaper adjust will continue. If we cannot clear the pending changes after 6 repeats, just leave them there and get rid of the loop.
+			->performLayoutLockedInner() this function is used to perform layout on all the windows of a DisplayContent.
+				1. get the logical width and height of this display.
+				2. call mPolicy.beginLayoutLw(), to make mPolicy be ready to layout the window of this display. that will, compute the layout params above.
+					1: Dock:
+						left = 0
+						top = mStatusBar.bottom
+						right = displayWidth
+						bottom = mNavigationBar.top
+					2: Content:
+						left = Dock.left;
+						top = Dock.top
+						right = Dock.right
+						bottom= (inputmethod.content.top + inputmethod.contentinsets.top)
+							or Dock.bottom
+					3: Cur:
+						left = Dock.left
+						top = Dock.top
+						right = Dock.right
+						bottom= (inputmethod.visible.top + inputmethod.visibleinsets.top)
+							or Dock.bottom
+					4: stable:
+						left = 0
+						top = mUnrestrictedScreenTop + mStatusBarHeight;
+						right = mDockRight
+						bottom = mNavigationFrame.top
+					5: System
+						left = 0
+						top =  mUnrestrictedScreenTop + mStatusBarHeight
+						bottom = mNavigationFrame.top
+						right = mNavigationFrame.right
+
+				3. traversal all the root windows, and layout it.
+					1) win.prelayout() will initialize the scale.
+					2) mPolicy.layoutWindowLw() will compute the pf, df, cf and vf for current window. and then call window.computeFrameLw() to calculate the final frame of this window.
+						->WindowState.computeFrameLw() will compute the final frame of this window via the given pf, df, cf and vf.
+							there are 5 compute result:
+								mContainingFrame = mParentFrame = pf; which is used to apply the gravity.
+								mDisplayFrame = df; which is used to restrict the final frames via Gravity.applyDisplay.
+								mContentFrame = cf; this will be used to calculate the contentInsets and returned to client.
+								mVisibleFrame = vf; this will be used to calculate the visibleInsets and returned to client.
+				4. traversal all the child windows, and layout it. this is similar with the layoutment of root windows. but the calculating of pf,df,cf and vf is up to the window it is attached to.
+				5. update the input windows via mInputMonitor
+				6. call mPolicy.finishLayoutLw(), currently, nothing is done there.
+			-->Post Layout. Post layout will check the layout result, and check if redo layout is needed.
+				1 mPolicy.beginPostLayoutPolicyLw(); restore all the parameters
+				2 foreach window in this display, call mPolicy.applyPostLayoutPolicyLw(); find the topmost visible full screen window. and check it's flags if it wants to dismiss/hide keygurad or force showing statusbar.
+				3 mPolicy.finishPostLayoutPolicyLw(); according to the result of applyPostLayoutPolicyLw(), Policy will show/hide statusbar and keyguard, this may cause a relayout needed. If so, some of pending changes is returned by this function. they are:
+					FINISH_LAYOUT_REDO_LAYOUT
+						this will perform a layout again
+					FINISH_LAYOUT_REDO_CONFIG
+						this will update the orientation from App tokens, and also perform a layout again.
+					FINISH_LAYOUT_REDO_WALLPAPER
+						this will adjustWallpaperWindowsLocked, and re assagnLayersLocked() if needed.
+					FINISH_LAYOUT_REDO_ANIM
+						not very clear
+		 3) 
+				
+				
+	
+
+-----------------------------------------------------------------------------------------------------------------------
+
+			
+			
+
+
